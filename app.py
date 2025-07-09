@@ -158,46 +158,63 @@ elif tool == "📗 PPTX to Word (Text + Images)":
 elif tool == "📽️ YouTube Downloader":
     st.subheader("Download YouTube Video/Audio")
     url = st.text_input("Enter YouTube URL")
-    format_option = st.selectbox("Choose format", ["🔊 MP3 (audio)", "🎧 WAV (audio)", "📹 MP4 (video 720p)", "📹 MP4 (video 1080p)", "📹 MP4 (video 4K)"])
+    format_option = st.selectbox("Choose format", [
+        "🔊 MP3 (audio)", 
+        "🎧 WAV (audio)", 
+        "📹 MP4 (video 720p)", 
+        "📹 MP4 (video 1080p)", 
+        "📹 MP4 (video 4K)"
+    ])
 
     if st.button("Download"):
         with tempfile.TemporaryDirectory() as tmpdir:
             output_template = os.path.join(tmpdir, "%(title)s.%(ext)s")
+
+            # Base yt-dlp config
             ydl_opts = {
                 "outtmpl": output_template,
                 "merge_output_format": "mp4",
-                "format": "bestvideo+bestaudio/best"
+                "postprocessors": [],
+                "postprocessor_args": [
+                    "-c:v", "libx264", "-crf", "20", "-preset", "fast",  # re-encode for compatibility
+                    "-c:a", "aac", "-b:a", "192k"                         # ensure audio is encoded in AAC
+                ],
+                "prefer_ffmpeg": True,
+                "ffmpeg_location": "ffmpeg"  # assumes ffmpeg is installed and on path
             }
 
             if "MP3" in format_option:
-                ydl_opts.update({
-                    "format": "bestaudio/best",
-                    "postprocessors": [{
-                        "key": "FFmpegExtractAudio",
-                        "preferredcodec": "mp3",
-                        "preferredquality": "192"
-                    }]
+                ydl_opts["format"] = "bestaudio/best"
+                ydl_opts["postprocessors"].append({
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192"
                 })
             elif "WAV" in format_option:
-                ydl_opts.update({
-                    "format": "bestaudio/best",
-                    "postprocessors": [{
-                        "key": "FFmpegExtractAudio",
-                        "preferredcodec": "wav"
-                    }]
+                ydl_opts["format"] = "bestaudio/best"
+                ydl_opts["postprocessors"].append({
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "wav"
                 })
-            elif "720p" in format_option:
-                ydl_opts["format"] = "bestvideo[height<=720]+bestaudio/best"
-            elif "1080p" in format_option:
-                ydl_opts["format"] = "bestvideo[height<=1080]+bestaudio/best"
-            elif "4K" in format_option:
-                ydl_opts["format"] = "bestvideo[height<=2160]+bestaudio/best"
+            else:
+                if "720p" in format_option:
+                    ydl_opts["format"] = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best"
+                elif "1080p" in format_option:
+                    ydl_opts["format"] = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best"
+                elif "4K" in format_option:
+                    ydl_opts["format"] = "bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best"
+
+                # ensure proper audio/video muxing with AAC for Premiere compatibility
+                ydl_opts["postprocessors"].append({
+                    "key": "FFmpegVideoConvertor",
+                    "preferedformat": "mp4"
+                })
 
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=True)
                     filename = ydl.prepare_filename(info)
-                    if not filename.endswith(".mp4"):
+                    if not filename.endswith(".mp4") and "MP4" in format_option:
                         filename = os.path.splitext(filename)[0] + ".mp4"
                     st.success(f"✅ Downloaded: {info['title']}")
                     st.download_button("Download File", data=open(filename, "rb"), file_name=os.path.basename(filename))
