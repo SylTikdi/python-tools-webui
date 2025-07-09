@@ -5,4 +5,5 @@ python-pptx
 yt-dlp
 comtypes; platform_system == "Windows"
 pdf2image
-
+git+https://github.com/openai/whisper.git
+ffmpeg-python
