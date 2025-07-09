@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment
+.env
+.venv/
+env/
+venv/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Streamlit
+.streamlit/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Output folders
+output/
+assets/
+*.pptx
+*.docx
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.mp3
+*.mp4
+
+# Logs
+*.log
+
+# VS Code
+.vscode/
