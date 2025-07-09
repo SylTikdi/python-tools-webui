@@ -9,7 +9,7 @@ from pptx import Presentation
 from yt_dlp import YoutubeDL
 from pdf2image import convert_from_path
 
-# ========== TOOL 1: YouTube Downloader with H.264 Re-encode ==========
+# ========== TOOL 1: YouTube Downloader with full H.264 FFmpeg re-encode ==========
 def youtube_download(url, format_choice, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     ydl_opts = {
@@ -36,11 +36,14 @@ def youtube_download(url, format_choice, output_dir):
         })
     else:
         resolution = format_choice.replace('p', '')
-        ydl_opts['format'] = f'bestvideo[ext=mp4][height<={resolution}]+bestaudio[ext=m4a]/best[ext=mp4][height<={resolution}]'
-        ydl_opts['postprocessors'] = [{
-            'key': 'FFmpegVideoConvertor',
-            'preferedformat': 'mp4'
-        }]
+        ydl_opts.update({
+            'format': f'bestvideo[ext=mp4][height<={resolution}]+bestaudio[ext=m4a]/best[ext=mp4][height<={resolution}]',
+            'postprocessors': [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',
+            }],
+            'postprocessor_args': ['-c:v', 'libx264', '-crf', '23', '-preset', 'veryfast']
+        })
 
     with YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
