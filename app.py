@@ -22,7 +22,8 @@ tool = st.sidebar.selectbox("Select a tool", [
     "🧾 Combine Flipped Images into PDF",
     "📤 Export PPTX Text & Images to Word",
     "📽️ YouTube Downloader",
-    "📥 Instagram Downloader (Public Only)", "🖼️ Image Format Converter"
+    "📥 Instagram Downloader (Public Only)",
+    "🖼️ Image Format Converter"
 ])
 
 # === 1. Whisper Transcription + Translation ===
@@ -173,7 +174,8 @@ elif tool == "📽️ YouTube Downloader":
                 st.error(f"❌ Failed to download: {e}")
 
 # === 7. Instagram Downloader (public reels/posts only) ===
-elif tool == "📥 Instagram Downloader (Public Only)", "🖼️ Image Format Converter":
+elif tool == "📥 Instagram Downloader (Public Only)",
+    "🖼️ Image Format Converter":
     st.subheader("Download public Instagram Reels or posts")
     ig_url = st.text_input("Paste Instagram URL")
     if st.button("Download"):
