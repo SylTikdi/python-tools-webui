@@ -4,3 +4,5 @@ python-docx
 python-pptx
 yt-dlp
 comtypes; platform_system == "Windows"
+pdf2image
+
