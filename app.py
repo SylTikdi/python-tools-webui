@@ -9,15 +9,24 @@ from pptx import Presentation
 from yt_dlp import YoutubeDL
 from pdf2image import convert_from_path
 
-# ========== TOOL 1: YouTube Downloader with full H.264 FFmpeg re-encode ==========
-def youtube_download(url, format_choice, output_dir):
+# ========== TOOL 1: YouTube / Instagram Downloader ==========
+def universal_download(url, format_choice, output_dir, source='youtube'):
     os.makedirs(output_dir, exist_ok=True)
     ydl_opts = {
         'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
         'merge_output_format': 'mp4',
     }
 
-    if format_choice == 'Audio (MP3)':
+    if source == 'instagram':
+        ydl_opts.update({
+            'format': 'bestvideo+bestaudio/best',
+            'postprocessors': [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',
+            }],
+            'postprocessor_args': ['-c:v', 'libx264', '-crf', '23', '-preset', 'veryfast']
+        })
+    elif format_choice == 'Audio (MP3)':
         ydl_opts.update({
             'format': 'bestaudio/best',
             'postprocessors': [{
@@ -49,13 +58,12 @@ def youtube_download(url, format_choice, output_dir):
         info = ydl.extract_info(url, download=True)
         return True, info.get('title', 'Downloaded')
 
-# ========== TOOL 2: PDF to JPEG ==========
+# Other tools unchanged
 def convert_pdf_to_jpg(uploaded_pdf, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         tmp_file.write(uploaded_pdf.read())
         tmp_file_path = tmp_file.name
-
     images = convert_from_path(tmp_file_path)
     image_paths = []
     for i, img in enumerate(images):
@@ -64,7 +72,6 @@ def convert_pdf_to_jpg(uploaded_pdf, output_dir):
         image_paths.append(output_path)
     return image_paths
 
-# ========== TOOL 3: Flip Images ==========
 def flip_images(input_images, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     output_files = []
@@ -76,7 +83,6 @@ def flip_images(input_images, output_dir):
         output_files.append(out_path)
     return output_files
 
-# ========== TOOL 4: Combine JPG to PDF ==========
 def combine_images_to_pdf(input_images, output_path):
     sorted_imgs = sorted(input_images, key=lambda x: [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', x.name)])
     image_list = []
@@ -85,33 +91,30 @@ def combine_images_to_pdf(input_images, output_path):
         if img.mode != 'RGB':
             img = img.convert('RGB')
         image_list.append(img)
-
     if image_list:
         first_image = image_list.pop(0)
         first_image.save(output_path, save_all=True, append_images=image_list)
         return output_path
     return None
 
-# ========== TOOL 5: PPTX to Word ==========
 def ppt_to_word(pptx_file, output_path):
     prs = Presentation(pptx_file)
     doc = Document()
-
     for i, slide in enumerate(prs.slides):
         doc.add_heading(f"Slide {i+1}", level=1)
         for shape in slide.shapes:
             if hasattr(shape, "text") and shape.text.strip():
                 doc.add_paragraph(shape.text.strip())
-
     doc.save(output_path)
     return output_path
 
-# ========== STREAMLIT UI ==========
+# UI
 st.set_page_config(page_title="Python Tools WebUI", layout="centered")
 st.title("🧰 Python Tools Web UI")
 
 tool = st.sidebar.selectbox("Choose a tool", [
     "📽️ YouTube Downloader",
+    "📸 Instagram Downloader",
     "🖼️ Convert PDF to JPEG",
     "🔄 Flip JPG Images",
     "📸 Combine JPGs to PDF",
@@ -125,7 +128,23 @@ if tool == "📽️ YouTube Downloader":
     if st.button("Download") and url:
         with tempfile.TemporaryDirectory() as tmpdir:
             try:
-                success, title = youtube_download(url, fmt, tmpdir)
+                success, title = universal_download(url, fmt, tmpdir, source='youtube')
+                if success:
+                    for file in os.listdir(tmpdir):
+                        with open(os.path.join(tmpdir, file), "rb") as f:
+                            st.download_button(f"Download: {file}", f, file_name=file)
+                else:
+                    st.error("❌ Failed to download.")
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+
+elif tool == "📸 Instagram Downloader":
+    st.subheader("Download Instagram Reels or Posts (public only)")
+    url = st.text_input("Paste Instagram URL")
+    if st.button("Download Reel/Post") and url:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            try:
+                success, title = universal_download(url, "mp4", tmpdir, source='instagram')
                 if success:
                     for file in os.listdir(tmpdir):
                         with open(os.path.join(tmpdir, file), "rb") as f:
