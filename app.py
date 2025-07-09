@@ -1,9 +1,8 @@
-print("🛠️ Debugging FFmpeg load...")
 
 import os
+import io
 import re
 import tempfile
-import shutil
 import base64
 import streamlit as st
 from PIL import Image
@@ -13,8 +12,11 @@ from pdf2image import convert_from_path
 import yt_dlp
 import whisper
 
-# === TOOL SELECTION ===
+print("🛠️ Debugging FFmpeg load...")
+
+st.set_page_config(page_title="Python Tools WebUI", layout="wide")
 st.title("🧰 Python Tools Web UI")
+
 tool = st.sidebar.selectbox("Select a tool", [
     "🧠 Whisper Transcription + Translation",
     "🖼️ PDF to JPEG (Google Slides)",
@@ -26,179 +28,155 @@ tool = st.sidebar.selectbox("Select a tool", [
     "🖼️ Image Format Converter"
 ])
 
-# === 1. Whisper Transcription + Translation ===
+# === 1. Whisper Transcription & Translation ===
 if tool == "🧠 Whisper Transcription + Translation":
-    st.subheader("Upload audio/video to transcribe or translate")
-    uploaded_file = st.file_uploader("Upload MP3, WAV, MP4, etc.", type=["mp3", "wav", "mp4"])
-    lang_from = st.selectbox("Source language", ["auto", "en", "hi", "mr", "ja"])
-    lang_to = st.selectbox("Translate to", ["None", "en", "hi", "mr", "ja"])
-    format_option = st.radio("Output format", ["Plain text (.txt)", "Subtitles (.srt)"])
+    st.subheader("🎧 Transcribe or Translate Audio/Video")
+    audio_file = st.file_uploader("Upload MP3, WAV, or MP4", type=["mp3", "wav", "mp4"])
+    task = st.selectbox("Choose task", ["transcribe", "translate"])
+    src_lang = st.selectbox("Source language (or 'auto')", ["auto", "en", "hi", "mr", "ja"])
+    out_format = st.radio("Download format", ["Text (.txt)", "Subtitles (.srt)"])
 
-    if st.button("Transcribe/Translate") and uploaded_file:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=uploaded_file.name) as tmp:
-            tmp.write(uploaded_file.read())
-            audio_path = tmp.name
+    if st.button("Run Whisper") and audio_file:
+        with st.spinner("Processing..."):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=audio_file.name) as tmp:
+                tmp.write(audio_file.read())
+                model = whisper.load_model("base")
+                result = model.transcribe(tmp.name, task=task, language=None if src_lang == "auto" else src_lang)
 
-        model = whisper.load_model("base")
-        result = model.transcribe(audio_path, language=None if lang_from == "auto" else lang_from, task="translate" if lang_to != "None" else "transcribe")
+            if out_format == "Text (.txt)":
+                text_output = result["text"]
+                st.text_area("Transcript", text_output, height=300)
+                st.download_button("Download TXT", text_output, file_name="transcript.txt")
+            else:
+                segments = result["segments"]
+                srt = ""
+                for i, seg in enumerate(segments):
+                    srt += f"{i+1}\n"
+                    start = seg["start"]
+                    end = seg["end"]
+                    srt += f"{int(start//60):02}:{int(start%60):02}:{int((start*1000)%1000):03} --> {int(end//60):02}:{int(end%60):02}:{int((end*1000)%1000):03}\n"
+                    srt += seg["text"].strip() + "\n\n"
+                st.download_button("Download SRT", srt, file_name="transcript.srt")
 
-        text = result["text"]
-        output_data = text
-        output_ext = "txt"
-
-        if format_option == "Subtitles (.srt)":
-            from datetime import timedelta
-            segments = result["segments"]
-            srt_output = ""
-            for i, seg in enumerate(segments):
-                start = str(timedelta(seconds=int(seg["start"])))
-                end = str(timedelta(seconds=int(seg["end"])))
-                srt_output += f"{i+1}\n{start} --> {end}\n{seg['text']}\n\n"
-            output_data = srt_output
-            output_ext = "srt"
-
-        st.download_button("📥 Download Result", data=output_data, file_name=f"output.{output_ext}")
-
-# === 2. PDF to JPEG (Google Slides Export) ===
+# === 2. PDF to JPEG ===
 elif tool == "🖼️ PDF to JPEG (Google Slides)":
-    st.subheader("Convert PDF to JPEG")
-    uploaded_pdf = st.file_uploader("Upload exported Google Slides as PDF", type=["pdf"])
-    if st.button("Convert to JPEG") and uploaded_pdf:
+    st.subheader("📄 Convert PDF to JPEG")
+    pdf_file = st.file_uploader("Upload exported PDF (from Google Slides)", type=["pdf"])
+    if st.button("Convert to JPEG") and pdf_file:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(uploaded_pdf.read())
-            tmp_path = tmp.name
-
-        images = convert_from_path(tmp_path)
-        output_dir = tempfile.mkdtemp()
-        for i, img in enumerate(images):
-            img_path = os.path.join(output_dir, f"slide{i+1}.jpg")
-            img.save(img_path, "JPEG")
-        st.success("✅ Converted!")
-        for img_file in sorted(os.listdir(output_dir)):
-            with open(os.path.join(output_dir, img_file), "rb") as f:
-                st.download_button(f"Download {img_file}", f, file_name=img_file)
+            tmp.write(pdf_file.read())
+            images = convert_from_path(tmp.name)
+            for i, img in enumerate(images):
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG")
+                st.image(img, caption=f"Slide {i+1}")
+                st.download_button(f"Download Slide {i+1}", buf.getvalue(), file_name=f"slide_{i+1}.jpg")
 
 # === 3. Flip Images ===
 elif tool == "🔄 Flip JPEG Images Horizontally":
-    st.subheader("Flip images horizontally")
-    uploaded = st.file_uploader("Upload multiple JPEG images", accept_multiple_files=True, type=["jpg", "jpeg"])
-    if st.button("Flip Images") and uploaded:
-        output_dir = tempfile.mkdtemp()
-        for file in uploaded:
-            img = Image.open(file)
+    st.subheader("↔️ Flip JPG Images Horizontally")
+    files = st.file_uploader("Upload JPG/JPEG files", accept_multiple_files=True, type=["jpg", "jpeg"])
+    if st.button("Flip") and files:
+        for img_file in files:
+            img = Image.open(img_file)
             flipped = img.transpose(Image.FLIP_LEFT_RIGHT)
-            out_path = os.path.join(output_dir, file.name)
-            flipped.save(out_path)
-            with open(out_path, "rb") as f:
-                st.download_button(f"Download {file.name}", f, file_name=file.name)
+            buf = io.BytesIO()
+            flipped.save(buf, format="JPEG")
+            st.image(flipped, caption="Flipped Image")
+            st.download_button("Download", buf.getvalue(), file_name="flipped_" + img_file.name)
 
 # === 4. Combine Flipped Images into PDF ===
 elif tool == "🧾 Combine Flipped Images into PDF":
-    st.subheader("Combine JPEGs into PDF (in order)")
-    uploaded = st.file_uploader("Upload flipped JPEG images", accept_multiple_files=True, type=["jpg", "jpeg"])
-    if st.button("Create PDF") and uploaded:
-        def natural_sort_key(s):
-            return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', s.name)]
-        files_sorted = sorted(uploaded, key=natural_sort_key)
+    st.subheader("🧾 Combine Flipped JPGs to PDF")
+    files = st.file_uploader("Upload Flipped JPGs", accept_multiple_files=True, type=["jpg", "jpeg"])
 
-        image_list = []
-        for file in files_sorted:
-            img = Image.open(file)
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-            image_list.append(img)
+    def natural_sort_key(s): return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', s.name)]
 
-        first_image = image_list.pop(0)
-        pdf_path = tempfile.mktemp(suffix=".pdf")
-        first_image.save(pdf_path, save_all=True, append_images=image_list)
-        with open(pdf_path, "rb") as f:
-            st.download_button("📄 Download PDF", f, file_name="combined_output.pdf")
+    if st.button("Create PDF") and files:
+        files = sorted(files, key=natural_sort_key)
+        images = []
+        for f in files:
+            img = Image.open(f)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            images.append(img)
+        pdf_buf = io.BytesIO()
+        images[0].save(pdf_buf, save_all=True, append_images=images[1:], format="PDF")
+        st.download_button("Download PDF", pdf_buf.getvalue(), file_name="combined.pdf")
 
-# === 5. PPTX to Word Export ===
+# === 5. PPTX to Word ===
 elif tool == "📤 Export PPTX Text & Images to Word":
-    st.subheader("Convert PowerPoint to Word")
-    uploaded_ppt = st.file_uploader("Upload PPTX file", type=["pptx"])
-    if st.button("Convert to Word") and uploaded_ppt:
+    st.subheader("📤 Export PowerPoint content to Word")
+    pptx_file = st.file_uploader("Upload PPTX", type=["pptx"])
+    if st.button("Export to Word") and pptx_file:
         try:
-            prs = Presentation(uploaded_ppt)
+            prs = Presentation(pptx_file)
             doc = Document()
-            for i, slide in enumerate(prs.slides):
-                doc.add_heading(f"Slide {i+1}", level=1)
+            for slide in prs.slides:
                 for shape in slide.shapes:
-                    if hasattr(shape, "text") and shape.text.strip():
-                        doc.add_paragraph(shape.text.strip())
-            word_path = tempfile.mktemp(suffix=".docx")
-            doc.save(word_path)
-            with open(word_path, "rb") as f:
-                st.download_button("📄 Download Word File", f, file_name="converted.docx")
+                    if shape.has_text_frame:
+                        text = shape.text.strip()
+                        if text:
+                            doc.add_paragraph(text)
+            buf = io.BytesIO()
+            doc.save(buf)
+            st.download_button("Download Word Document", buf.getvalue(), file_name="slides.docx")
         except Exception as e:
             st.error(f"❌ Word export failed: {e}")
 
-# === 6. YouTube Downloader (4K + audio fix) ===
+# === 6. YouTube Downloader ===
 elif tool == "📽️ YouTube Downloader":
-    st.subheader("Download YouTube Video/Audio")
+    st.subheader("📽️ Download YouTube Video or Audio")
     url = st.text_input("Enter YouTube URL")
-    format_option = st.selectbox("Choose format", ["🔊 MP3", "🎧 WAV", "📹 MP4 720p", "📹 MP4 1080p", "📹 MP4 4K"])
-    if st.button("Download"):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            outtmpl = os.path.join(tmpdir, "%(title)s.%(ext)s")
-            ydl_opts = {
-                "outtmpl": outtmpl,
-                "merge_output_format": "mp4",
-                "postprocessor_args": ["-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "aac", "-b:a", "192k"],
-                "prefer_ffmpeg": True
-            }
+    quality = st.selectbox("Select Format", ["MP3", "WAV", "720p MP4", "1080p MP4", "4K MP4"])
 
-            if "MP3" in format_option:
-                ydl_opts["format"] = "bestaudio/best"
-                ydl_opts["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}]
-            elif "WAV" in format_option:
-                ydl_opts["format"] = "bestaudio/best"
-                ydl_opts["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "wav"}]
-            else:
-                if "720p" in format_option:
-                    ydl_opts["format"] = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best"
-                elif "1080p" in format_option:
-                    ydl_opts["format"] = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best"
-                elif "4K" in format_option:
-                    ydl_opts["format"] = "bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best"
-
-            try:
+    if st.button("Download") and url:
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                ydl_opts = {"outtmpl": os.path.join(tmpdir, "%(title)s.%(ext)s")}
+                if quality in ["MP3", "WAV"]:
+                    ydl_opts.update({
+                        "format": "bestaudio",
+                        "postprocessors": [{
+                            "key": "FFmpegExtractAudio",
+                            "preferredcodec": quality.lower(),
+                        }]
+                    })
+                else:
+                    ydl_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4"
+                    ydl_opts["merge_output_format"] = "mp4"
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=True)
-                    final_path = ydl.prepare_filename(info).rsplit(".", 1)[0] + ".mp4"
-                    st.success(f"✅ Downloaded: {info['title']}")
-                    with open(final_path, "rb") as f:
-                        st.download_button("📥 Download File", f, file_name=os.path.basename(final_path))
-            except Exception as e:
-                st.error(f"❌ Failed to download: {e}")
+                    filename = ydl.prepare_filename(info).rsplit(".", 1)[0] + (".mp3" if quality == "MP3" else ".wav" if quality == "WAV" else ".mp4")
+                    with open(filename, "rb") as f:
+                        st.download_button("Download", f.read(), file_name=os.path.basename(filename))
+        except Exception as e:
+            st.error(f"❌ Failed to download: {e}")
 
-# === 7. Instagram Downloader (public reels/posts only) ===
+# === 7. Instagram Downloader (Public) ===
 elif tool == "📥 Instagram Downloader (Public Only)":
-    "🖼️ Image Format Converter":
-    st.subheader("Download public Instagram Reels or posts")
-    ig_url = st.text_input("Paste Instagram URL")
-    if st.button("Download"):
+    st.subheader("📥 Download Instagram Reel or Post (Public)")
+    insta_url = st.text_input("Enter Instagram Reel/Post URL")
+
+    if st.button("Download") and insta_url:
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 ydl_opts = {
-                    "outtmpl": os.path.join(tmpdir, "%(title)s.%(ext)s"),
-                    "quiet": True
+                    "outtmpl": os.path.join(tmpdir, "%(title)s.%(ext)s")
                 }
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(ig_url, download=True)
-                    downloaded_path = ydl.prepare_filename(info)
-                    with open(downloaded_path, "rb") as f:
-                        st.download_button("📥 Download Media", f, file_name=os.path.basename(downloaded_path))
+                    info = ydl.extract_info(insta_url, download=True)
+                    filename = ydl.prepare_filename(info)
+                    with open(filename, "rb") as f:
+                        st.download_button("Download File", f.read(), file_name=os.path.basename(filename))
         except Exception as e:
-            st.error(f"❌ Error: {e}")
-
+            st.error(f"❌ Failed to download: {e}")
 
 # === 8. Image Format Converter ===
 elif tool == "🖼️ Image Format Converter":
     st.subheader("Convert images to another format")
-    uploaded_images = st.file_uploader("Upload images to convert", accept_multiple_files=True, type=["jpg", "jpeg", "png", "webp", "avif", "heic"])
-    output_format = st.selectbox("Select output format", ["JPG", "PNG", "WEBP", "HEIC", "AVIF"])
+    uploaded_images = st.file_uploader("Upload images", accept_multiple_files=True, type=["jpg", "jpeg", "png", "webp", "avif", "heic"])
+    output_format = st.selectbox("Output format", ["JPG", "PNG", "WEBP", "HEIC", "AVIF"])
 
     format_map = {
         "JPG": "JPEG",
