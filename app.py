@@ -22,7 +22,7 @@ tool = st.sidebar.selectbox("Select a tool", [
     "🧾 Combine Flipped Images into PDF",
     "📤 Export PPTX Text & Images to Word",
     "📽️ YouTube Downloader",
-    "📥 Instagram Downloader (Public Only)"
+    "📥 Instagram Downloader (Public Only)", "🖼️ Image Format Converter"
 ])
 
 # === 1. Whisper Transcription + Translation ===
@@ -173,7 +173,7 @@ elif tool == "📽️ YouTube Downloader":
                 st.error(f"❌ Failed to download: {e}")
 
 # === 7. Instagram Downloader (public reels/posts only) ===
-elif tool == "📥 Instagram Downloader (Public Only)":
+elif tool == "📥 Instagram Downloader (Public Only)", "🖼️ Image Format Converter":
     st.subheader("Download public Instagram Reels or posts")
     ig_url = st.text_input("Paste Instagram URL")
     if st.button("Download"):
@@ -190,3 +190,33 @@ elif tool == "📥 Instagram Downloader (Public Only)":
                         st.download_button("📥 Download Media", f, file_name=os.path.basename(downloaded_path))
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
+
+# === 8. Image Format Converter ===
+elif tool == "🖼️ Image Format Converter":
+    st.subheader("Convert images to another format")
+    uploaded_images = st.file_uploader("Upload images to convert", accept_multiple_files=True, type=["jpg", "jpeg", "png", "webp", "avif", "heic"])
+    output_format = st.selectbox("Select output format", ["JPG", "PNG", "WEBP", "HEIC", "AVIF"])
+
+    format_map = {
+        "JPG": "JPEG",
+        "PNG": "PNG",
+        "WEBP": "WEBP",
+        "HEIC": "HEIC",
+        "AVIF": "AVIF"
+    }
+
+    if st.button("Convert") and uploaded_images:
+        for uploaded in uploaded_images:
+            try:
+                img = Image.open(uploaded)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                ext = format_map[output_format]
+                filename = os.path.splitext(uploaded.name)[0] + "." + output_format.lower()
+                with tempfile.NamedTemporaryFile(delete=False, suffix="." + output_format.lower()) as tmp:
+                    img.save(tmp.name, ext)
+                    with open(tmp.name, "rb") as f:
+                        st.download_button(f"Download {filename}", f, file_name=filename)
+            except Exception as e:
+                st.error(f"❌ Failed to convert {uploaded.name}: {e}")
