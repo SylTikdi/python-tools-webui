@@ -26,7 +26,6 @@ tool = st.sidebar.selectbox("Select a tool", [
     "🖼️ Image Format Converter"
 ])
 
-# Whisper Transcription & Translation
 if tool == "🧠 Whisper Transcription + Translation":
     st.subheader("🎧 Transcribe or Translate Audio/Video")
     audio_file = st.file_uploader("Upload MP3, WAV, or MP4", type=["mp3", "wav", "mp4"])
@@ -49,15 +48,9 @@ if tool == "🧠 Whisper Transcription + Translation":
                 segments = result["segments"]
                 srt = ""
                 for i, seg in enumerate(segments):
-                    srt += f"{i+1}
-"
+                    srt += f"{i+1}\n"
                     start = seg["start"]
                     end = seg["end"]
-                    srt += f"{int(start//60):02}:{int(start%60):02}:{int((start*1000)%1000):03} --> {int(end//60):02}:{int(end%60):02}:{int((end*1000)%1000):03}
-"
-                    srt += seg["text"].strip() + "
-
-"
+                    srt += f"{int(start//60):02}:{int(start%60):02}:{int((start*1000)%1000):03} --> {int(end//60):02}:{int(end%60):02}:{int((end*1000)%1000):03}\n"
+                    srt += seg["text"].strip() + "\n\n"
                 st.download_button("Download SRT", srt, file_name="transcript.srt")
-
-# [Remaining tools trimmed for brevity; full logic is preserved in previous completions]
