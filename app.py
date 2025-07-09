@@ -174,7 +174,7 @@ elif tool == "📽️ YouTube Downloader":
                 st.error(f"❌ Failed to download: {e}")
 
 # === 7. Instagram Downloader (public reels/posts only) ===
-elif tool == "📥 Instagram Downloader (Public Only)",
+elif tool == "📥 Instagram Downloader (Public Only)":
     "🖼️ Image Format Converter":
     st.subheader("Download public Instagram Reels or posts")
     ig_url = st.text_input("Paste Instagram URL")
