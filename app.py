@@ -198,3 +198,24 @@ elif tool == "🖼️ Image Format Converter":
                         st.download_button(f"Download {filename}", f, file_name=filename)
             except Exception as e:
                 st.error(f"❌ Failed to convert {uploaded.name}: {e}")
+# Re-encode using ffmpeg for Premiere Pro compatibility
+safe_output = os.path.join(tmpdir, "safe_output.mp4")
+try:
+    subprocess.run([
+        "ffmpeg", "-i", downloaded_file,
+        "-r", "30",
+        "-profile:v", "high",
+        "-level", "4.0",
+        "-pix_fmt", "yuv420p",
+        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-c:a", "aac",
+        "-movflags", "+faststart",
+        safe_output
+    ], check=True)
+    st.success("✅ Video re-encoded for Premiere Pro compatibility")
+    with open(safe_output, "rb") as f:
+        st.download_button("⬇️ Download Final MP4", f, file_name="fixed_video.mp4", mime="video/mp4")
+except Exception as e:
+    st.error(f"❌ Re-encode failed: {e}")
+
+
